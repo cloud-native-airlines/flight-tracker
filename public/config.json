@@ -1,0 +1,12 @@
+{
+  "adsbBase": "/adsb",
+  "simBase": "/sim",
+  "natsUrl": "/nats",
+  "tickSubject": "cna.sim.tick",
+  "aircraftId": "N100CA",
+  "mapStyle": "https://demotiles.maplibre.org/style.json",
+  "airports": [
+    { "code": "MSP", "name": "Minneapolis–Saint Paul International", "lat": 44.8848, "lon": -93.2223 },
+    { "code": "ORD", "name": "Chicago O'Hare International", "lat": 41.9742, "lon": -87.9073 }
+  ]
+}

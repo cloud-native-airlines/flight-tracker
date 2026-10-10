@@ -1,0 +1,190 @@
+:root {
+  --panel: rgba(15, 23, 42, 0.86);
+  --ink: #e8eaed;
+  --muted: #9aa0aa;
+  --ok: #22c55e;
+  --paused: #f59e0b;
+  --accent: #3b82f6;
+  --border: rgba(255, 255, 255, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  width: 100%;
+}
+body {
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #0f1115;
+  color: var(--ink);
+  overflow: hidden;
+}
+
+.map {
+  position: absolute;
+  inset: 0;
+}
+
+/* Airport markers */
+.airport {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  pointer-events: none;
+}
+.airport-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+}
+.airport-code {
+  font-weight: 700;
+  font-size: 12px;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* Aircraft marker */
+.aircraft {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+  will-change: transform;
+}
+
+/* Clock HUD */
+.hud {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 10;
+  min-width: 220px;
+  padding: 16px 18px;
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--ink);
+}
+.hud-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.hud-clock {
+  font-variant-numeric: tabular-nums;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.hud-date {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.hud-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  font-weight: 600;
+  font-size: 13px;
+}
+.hud-status .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.hud-status.running {
+  color: var(--ok);
+}
+.hud-status.running .dot {
+  background: var(--ok);
+}
+.hud-status.paused {
+  color: var(--paused);
+}
+.hud-status.paused .dot {
+  background: var(--paused);
+}
+
+.hud-aircraft {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.hud-aircraft.muted {
+  color: var(--muted);
+}
+.ac-id {
+  font-weight: 700;
+}
+.ac-flight {
+  margin-left: 8px;
+  color: var(--muted);
+}
+.ac-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.hud-meta {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.conn-open {
+  color: var(--ok);
+}
+.conn-connecting {
+  color: var(--paused);
+}
+.conn-closed {
+  color: #ef4444;
+}
+.run {
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+
+.map-note {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  z-index: 10;
+  padding: 8px 12px;
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  max-width: 280px;
+}
+
+.splash {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  color: var(--ink);
+}
+.splash h1 {
+  font-weight: 600;
+}
