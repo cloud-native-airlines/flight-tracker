@@ -1,4 +1,4 @@
-.PHONY: help install dev build test typecheck build-image docker-run push-image clean
+.PHONY: help deps install dev build test typecheck build-image docker-run push-image clean
 
 PORT      ?= 8090
 IMAGE     ?= cna-flight-tracker
@@ -10,6 +10,12 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
+node_modules/.bin/vitest:
+	npm install
+
+deps:
+	npm install
+
 install: ## Install dependencies
 	npm ci
 
@@ -19,7 +25,7 @@ dev: ## Run the Vite dev server (proxies to the compose stack)
 build: ## Type-check and build the production bundle
 	npm run build
 
-test: ## Run unit tests
+test: node_modules/.bin/vitest ## Run unit tests
 	npm test
 
 typecheck: ## Type-check only
