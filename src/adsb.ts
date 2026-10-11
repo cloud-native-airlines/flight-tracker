@@ -17,3 +17,20 @@ export async function fetchLatest(
   const body = (await res.json()) as { report: Report };
   return body.report;
 }
+
+// Fetch the full chronological history for an aircraft within a run — the
+// reported track (origin through current position).
+export async function fetchHistory(
+  base: string,
+  runId: string,
+  aircraftId: string,
+  signal?: AbortSignal,
+): Promise<Report[]> {
+  const url =
+    `${base}/api/v1/reports?run_id=${encodeURIComponent(runId)}` +
+    `&aircraft_id=${encodeURIComponent(aircraftId)}`;
+  const res = await fetch(url, { signal });
+  if (!res.ok) throw new Error(`ADS-B returned ${res.status}`);
+  const body = (await res.json()) as { reports: Report[] };
+  return body.reports;
+}
