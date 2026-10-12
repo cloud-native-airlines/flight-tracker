@@ -13,6 +13,7 @@
   "dependencies": {
     "maplibre-gl": "^4.7.1",
     "nats.ws": "^1.30.3",
+    "pmtiles": "^4.5.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

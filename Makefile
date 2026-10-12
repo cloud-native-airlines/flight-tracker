@@ -1,4 +1,5 @@
-.PHONY: help deps install dev build test typecheck build-image docker-run push-image clean
+.PHONY: help deps install dev build test typecheck build-image docker-run push-image \
+        pmtiles-cli basemap clean
 
 PORT      ?= 8090
 IMAGE     ?= cna-flight-tracker
@@ -43,6 +44,21 @@ push-image: build-image ## Build and push the image to the registry (set REGISTR
 		exit 1; \
 	fi
 	docker push $(IMAGE_REF)
+
+pmtiles-cli: ## Install the go-pmtiles CLI (needed to download/extract basemaps)
+	go install github.com/protomaps/go-pmtiles@latest
+
+# Self-hosted PMTiles basemap. Downloaded from a Protomaps planet build by
+# extracting a bbox/zoom subset. Protomaps builds expire after ~3 months — bump
+# PMTILES_BUILD to a current date (https://build.protomaps.com) if it 404s.
+# Default coverage is the whole world at low zoom (global, ~43 MB).
+PMTILES     	?= go-pmtiles
+PMTILES_BUILD   ?= https://build.protomaps.com/20261011.pmtiles
+PMTILES_BBOX    ?= -180,-85,180,85
+PMTILES_MAXZOOM ?= 6
+basemap: public/basemap.pmtiles ## Download public/basemap.pmtiles (coverage via PMTILES_* vars)
+public/basemap.pmtiles:
+	$(PMTILES) extract $(PMTILES_BUILD) $@ --bbox=$(PMTILES_BBOX) --maxzoom=$(PMTILES_MAXZOOM)
 
 clean: ## Remove build artifacts
 	rm -rf dist node_modules

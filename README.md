@@ -51,11 +51,38 @@ any environment without a rebuild. Defaults ([public/config.json](public/config.
 | `natsUrl` | WebSocket path for NATS (`/nats`, proxied) |
 | `tickSubject` | NATS subject for ticks (`cna.sim.tick`) |
 | `aircraftId` | Aircraft to track (`N100CA`) |
-| `mapStyle` | MapLibre style URL (default: key-free demo tiles) |
+| `mapStyle` | `"pmtiles"` (self-hosted basemap), `""` (plain dark), or a MapLibre style URL |
 | `airports` | Airports to render (code, name, lat, lon) |
 
 Mount your own `config.json` over `/usr/share/nginx/html/config.json` to change
 endpoints, the tracked aircraft, or the map style.
+
+## Basemap (PMTiles)
+
+The map is a **self-hosted** Protomaps basemap — a single
+[`public/basemap.pmtiles`](public/basemap.pmtiles) archive served statically and
+read client-side via HTTP range requests. No API key, no tile server, no internet
+at runtime. The style (dark, label-free) is built in code in
+[`src/MapView.tsx`](src/MapView.tsx).
+
+The committed archive is a ~43 MB **world** extract at zoom 0–6 — global coverage
+at the detail a cruise-altitude tracker uses (no blank areas wherever a flight
+goes); deep street-level zoom is traded away.
+
+To (re)generate it, install the CLI once with `make pmtiles-cli`, then:
+
+```sh
+make basemap PMTILES_BBOX=-10,35,40,72 PMTILES_MAXZOOM=7   # custom bbox/zoom
+```
+
+Protomaps planet builds expire after ~3 months; bump `PMTILES_BUILD` to a current
+date from <https://build.protomaps.com> if a download 404s. Labels are omitted to
+stay self-contained; adding them requires bundling glyph fonts.
+
+> **MapLibre is pinned to v4 on purpose.** v5/v6 load their web worker via
+> `new Worker(new URL(…, import.meta.url))`, which Vite 8's rolldown bundler does
+> not emit, so nothing source-backed renders. v4 inlines its worker as a Blob.
+> Revisit when moving off Vite 8 (rolldown) or when the interop is fixed.
 
 ## How it works
 

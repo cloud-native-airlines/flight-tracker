@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import type { StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { Protocol } from "pmtiles";
 import type { Config, Report } from "./types";
+
+// Register the pmtiles:// protocol so MapLibre can read a self-hosted PMTiles
+// archive via HTTP range requests. Safe to call once at module load.
+maplibregl.addProtocol("pmtiles", new Protocol().tile);
 
 // A plane pointing north (up) at rotation 0; MapView rotates it to the heading.
 // Fill is currentColor so CSS can tint it (white normally, yellow when selected).
@@ -17,6 +22,50 @@ const OFFLINE_STYLE: StyleSpecification = {
   sources: {},
   layers: [{ id: "bg", type: "background", paint: { "background-color": "#0b1b2b" } }],
 };
+
+// A dark basemap over a self-hosted PMTiles archive (served at /basemap.pmtiles).
+// No glyphs/sprite, so no font/icon network dependency — fully offline.
+function pmtilesStyle(): StyleSpecification {
+  const url = `pmtiles://${window.location.origin}/basemap.pmtiles`;
+  return {
+    version: 8,
+    sources: {
+      basemap: { type: "vector", url, attribution: "© OpenStreetMap contributors, © Protomaps" },
+    },
+    layers: [
+      { id: "bg", type: "background", paint: { "background-color": "#0b1b2b" } },
+      { id: "earth", type: "fill", source: "basemap", "source-layer": "earth", paint: { "fill-color": "#15293b" } },
+      {
+        id: "landcover",
+        type: "fill",
+        source: "basemap",
+        "source-layer": "landcover",
+        paint: { "fill-color": "#17324a", "fill-opacity": 0.5 },
+      },
+      { id: "water", type: "fill", source: "basemap", "source-layer": "water", paint: { "fill-color": "#0b1f33" } },
+      {
+        id: "roads",
+        type: "line",
+        source: "basemap",
+        "source-layer": "roads",
+        paint: { "line-color": "#2b405a", "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.3, 8, 1.2] },
+      },
+      {
+        id: "boundaries",
+        type: "line",
+        source: "basemap",
+        "source-layer": "boundaries",
+        paint: { "line-color": "#3a5674", "line-width": 0.7 },
+      },
+    ],
+  } as StyleSpecification;
+}
+
+function resolveStyle(mapStyle: string): string | StyleSpecification {
+  if (mapStyle === "pmtiles") return pmtilesStyle();
+  if (mapStyle) return mapStyle; // an external style URL
+  return OFFLINE_STYLE; // plain dark background
+}
 
 const SELECTED = "#facc15";
 const LINE_SRC = "ft-line";
@@ -149,7 +198,7 @@ export function MapView({
 
     const map = new maplibregl.Map({
       container,
-      style: config.mapStyle || OFFLINE_STYLE,
+      style: resolveStyle(config.mapStyle),
       center: [config.airports[0].lon, config.airports[0].lat],
       zoom: 5,
       attributionControl: { compact: true },

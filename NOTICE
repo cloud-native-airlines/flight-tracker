@@ -1,0 +1,22 @@
+Cloud Native Airlines Flight Tracker — third-party data notice
+
+Map basemap (public/basemap.pmtiles)
+------------------------------------
+This repository includes a bundled basemap, public/basemap.pmtiles, which is a
+geographic subset extracted from a Protomaps planet build.
+
+  - Source data: © OpenStreetMap contributors (https://www.openstreetmap.org/copyright)
+  - Low-zoom data: Natural Earth (public domain, https://www.naturalearthdata.com)
+  - Built and distributed via Protomaps (https://protomaps.com)
+
+The OpenStreetMap-derived data is licensed under the Open Database License
+(ODbL) v1.0: https://opendatacommons.org/licenses/odbl/1-0/
+
+Under ODbL, this bundled database may be copied, redistributed, and used
+(including commercially), provided attribution to OpenStreetMap contributors is
+kept visible to users. The application displays this attribution on the map via
+MapLibre's attribution control. If you redistribute the basemap file itself, it
+must remain under ODbL with attribution intact.
+
+To regenerate or change the basemap, see the "Basemap (PMTiles)" section in
+README.md (`make basemap`).
