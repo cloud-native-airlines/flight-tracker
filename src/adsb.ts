@@ -34,3 +34,45 @@ export async function fetchHistory(
   const body = (await res.json()) as { reports: Report[] };
   return body.reports;
 }
+
+// Fetch the latest position of every aircraft in a run, optionally restricted to
+// a map viewport (bbox) and/or a status (e.g. "flying").
+export async function fetchPositions(
+  base: string,
+  runId: string,
+  bbox?: string,
+  status?: string,
+  signal?: AbortSignal,
+): Promise<Report[]> {
+  const params = new URLSearchParams({ run_id: runId });
+  if (bbox) params.set("bbox", bbox);
+  if (status) params.set("status", status);
+  const res = await fetch(`${base}/api/v1/positions?${params.toString()}`, { signal });
+  if (!res.ok) throw new Error(`ADS-B returned ${res.status}`);
+  const body = (await res.json()) as { positions: Report[] };
+  return body.positions;
+}
+
+export interface Airport {
+  code: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  elevation_m?: number | null;
+  icao?: string | null;
+  country?: string | null;
+}
+
+// Fetch airports, optionally restricted to a map viewport
+// (bbox = "minLon,minLat,maxLon,maxLat").
+export async function fetchAirports(
+  base: string,
+  bbox?: string,
+  signal?: AbortSignal,
+): Promise<Airport[]> {
+  const query = bbox ? `?bbox=${encodeURIComponent(bbox)}` : "";
+  const res = await fetch(`${base}/api/v1/airports${query}`, { signal });
+  if (!res.ok) throw new Error(`ADS-B returned ${res.status}`);
+  const body = (await res.json()) as { airports: Airport[] };
+  return body.airports;
+}

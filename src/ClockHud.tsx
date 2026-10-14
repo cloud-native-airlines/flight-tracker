@@ -15,13 +15,15 @@ export function ClockHud({
   simulatedAt,
   paused,
   connection,
-  aircraft,
+  count,
+  selected,
 }: {
   runId: string | null;
   simulatedAt: string | null;
   paused: boolean;
   connection: Connection;
-  aircraft: Report | null;
+  count: number;
+  selected: Report | null;
 }) {
   const { time, date } = timeParts(simulatedAt);
   return (
@@ -35,19 +37,21 @@ export function ClockHud({
         {simulatedAt ? (paused ? "Paused" : "Running") : "Waiting for ticks"}
       </div>
 
-      {aircraft ? (
+      {selected ? (
         <div className="hud-aircraft">
-          <span className="ac-id">{aircraft.aircraft_id}</span>
-          <span className="ac-flight">{aircraft.flight_id}</span>
+          <span className="ac-id">{selected.aircraft_id}</span>
+          <span className="ac-flight">{selected.flight_id}</span>
           <div className="ac-stats">
-            <span>{aircraft.status}</span>
-            <span>{Math.round(aircraft.altitude_m).toLocaleString()} m</span>
-            <span>{aircraft.ground_speed_mps.toFixed(0)} m/s</span>
-            <span>{Math.round(aircraft.heading_deg)}°</span>
+            <span>{selected.status}</span>
+            <span>{Math.round(selected.altitude_m).toLocaleString()} m</span>
+            <span>{selected.ground_speed_mps.toFixed(0)} m/s</span>
+            <span>{Math.round(selected.heading_deg)}°</span>
           </div>
         </div>
       ) : (
-        <div className="hud-aircraft muted">No active flight</div>
+        <div className="hud-aircraft muted">
+          {count} {count === 1 ? "flight" : "flights"} in view — click one to select
+        </div>
       )}
 
       <div className="hud-meta">

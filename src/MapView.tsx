@@ -3,6 +3,7 @@ import * as maplibregl from "maplibre-gl";
 import type { StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Protocol } from "pmtiles";
+import { fetchAirports } from "./adsb";
 import type { Config, Report } from "./types";
 
 // Register the pmtiles:// protocol so MapLibre can read a self-hosted PMTiles
@@ -88,41 +89,55 @@ function pointsCollection(coords: Lng[]): GeoJSON.FeatureCollection {
   };
 }
 
+interface AircraftMarker {
+  marker: maplibregl.Marker;
+  el: HTMLDivElement;
+}
+
 export function MapView({
   config,
-  aircraft,
-  selected,
+  positions,
+  selectedId,
   track,
   onSelect,
   onDeselect,
+  onBboxChange,
 }: {
   config: Config;
-  aircraft: Report | null;
-  selected: boolean;
+  positions: Report[];
+  selectedId: string | null;
   track: Report[];
-  onSelect: () => void;
+  onSelect: (aircraftId: string) => void;
   onDeselect: () => void;
+  onBboxChange: (bbox: string | undefined) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
-  const markerRef = useRef<maplibregl.Marker | null>(null);
-  const markerElRef = useRef<HTMLDivElement | null>(null);
+  const aircraftMarkersRef = useRef<globalThis.Map<string, AircraftMarker>>(new globalThis.Map());
   const hadHashRef = useRef(false);
   const userMovedRef = useRef(false);
-  const aircraftFitDoneRef = useRef(false);
+  const didInitialFitRef = useRef(false);
+  const airportMarkersRef = useRef<globalThis.Map<string, maplibregl.Marker>>(new globalThis.Map());
+  const airportAbortRef = useRef<AbortController | null>(null);
+  const airportTimerRef = useRef<number | null>(null);
   const [drawError, setDrawError] = useState<string | null>(null);
 
+  // The currently selected aircraft's latest position (if it's in view).
+  const selectedPosition = positions.find((p) => p.aircraft_id === selectedId) ?? null;
+
   // Live mirrors so event handlers (which outlive a render) read current values.
-  const selectedRef = useRef(selected);
-  const aircraftRef = useRef(aircraft);
+  const selectedRef = useRef(selectedId);
+  const aircraftRef = useRef<Report | null>(selectedPosition);
   const trackRef = useRef(track);
   const onSelectRef = useRef(onSelect);
   const onDeselectRef = useRef(onDeselect);
-  selectedRef.current = selected;
-  aircraftRef.current = aircraft;
+  const onBboxChangeRef = useRef(onBboxChange);
+  selectedRef.current = selectedId;
+  aircraftRef.current = selectedPosition;
   trackRef.current = track;
   onSelectRef.current = onSelect;
   onDeselectRef.current = onDeselect;
+  onBboxChangeRef.current = onBboxChange;
 
   // Create the track sources/layers (empty, hidden). Called on style load, when
   // the style is guaranteed ready to accept them — unlike isStyleLoaded(), which
@@ -186,6 +201,51 @@ export function MapView({
     }
   }, [config]);
 
+  // Load airport markers for the current viewport from ADS-B, reconciling the
+  // live set of markers by airport code (add new, remove those scrolled away).
+  const refreshAirports = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const b = map.getBounds();
+    const west = Math.max(-180, b.getWest());
+    const east = Math.min(180, b.getEast());
+    const south = Math.max(-90, b.getSouth());
+    const north = Math.min(90, b.getNorth());
+    const bbox = west <= east && south <= north ? `${west},${south},${east},${north}` : undefined;
+    onBboxChangeRef.current(bbox); // let the fleet query refetch for this viewport
+
+    airportAbortRef.current?.abort();
+    const ctrl = new AbortController();
+    airportAbortRef.current = ctrl;
+    fetchAirports(config.adsbBase, bbox, ctrl.signal)
+      .then((airports) => {
+        const markers = airportMarkersRef.current;
+        const present = new Set(airports.map((a) => a.code));
+        for (const [code, marker] of markers) {
+          if (!present.has(code)) {
+            marker.remove();
+            markers.delete(code);
+          }
+        }
+        for (const a of airports) {
+          if (markers.has(a.code)) continue;
+          const el = document.createElement("div");
+          el.className = "airport";
+          el.innerHTML = `<span class="airport-dot"></span><span class="airport-code">${a.code}</span>`;
+          el.title = a.name;
+          markers.set(
+            a.code,
+            new maplibregl.Marker({ element: el, anchor: "center" })
+              .setLngLat([a.longitude, a.latitude])
+              .addTo(map),
+          );
+        }
+      })
+      .catch(() => {
+        /* transient error or aborted; keep existing markers */
+      });
+  }, [config]);
+
   // Initialize the map once, synchronously, with a self-contained dark style by
   // default. External tile styles are unreliable here, and a background-only
   // style loads instantly — so isStyleLoaded() is true (which MapLibre needs to
@@ -206,25 +266,16 @@ export function MapView({
     });
     mapRef.current = map;
 
-    let overlaysAdded = false;
-    const addOverlays = () => {
-      if (overlaysAdded) return;
-      overlaysAdded = true;
-      for (const airport of config.airports) {
-        const el = document.createElement("div");
-        el.className = "airport";
-        el.innerHTML = `<span class="airport-dot"></span><span class="airport-code">${airport.code}</span>`;
-        el.title = airport.name;
-        new maplibregl.Marker({ element: el, anchor: "center" })
-          .setLngLat([airport.lon, airport.lat])
-          .addTo(map);
-      }
-    };
-
     map.on("style.load", () => {
-      addOverlays();
       ensureTrackLayers();
       applyTrack();
+      refreshAirports();
+    });
+
+    // Reload airports for the new viewport after the map settles (debounced).
+    map.on("moveend", () => {
+      if (airportTimerRef.current) window.clearTimeout(airportTimerRef.current);
+      airportTimerRef.current = window.setTimeout(() => refreshAirports(), 300);
     });
 
     // Deselect only on a stationary click on the map background — not a drag.
@@ -247,63 +298,69 @@ export function MapView({
     map.on("rotatestart", markMoved);
 
     return () => {
+      if (airportTimerRef.current) window.clearTimeout(airportTimerRef.current);
+      airportAbortRef.current?.abort();
+      airportMarkersRef.current.clear();
+      aircraftMarkersRef.current.clear();
       map.remove();
       mapRef.current = null;
-      markerRef.current = null;
-      markerElRef.current = null;
     };
-  }, [config, ensureTrackLayers, applyTrack]);
+  }, [config, ensureTrackLayers, applyTrack, refreshAirports]);
 
-  // Default view: a box containing the airports (and the aircraft once known),
-  // unless the URL specifies a view or the user has moved the map.
+  // Default view: a box around the tracked flight's airports, unless the URL
+  // specifies a view or the user has moved the map.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || hadHashRef.current || userMovedRef.current || aircraftFitDoneRef.current) return;
+    if (!map || hadHashRef.current || userMovedRef.current || didInitialFitRef.current) return;
+    didInitialFitRef.current = true;
     const bounds = new maplibregl.LngLatBounds();
     for (const a of config.airports) bounds.extend([a.lon, a.lat]);
-    if (aircraft) {
-      bounds.extend([aircraft.longitude, aircraft.latitude]);
-      aircraftFitDoneRef.current = true;
-    }
     map.fitBounds(bounds, { padding: 140, duration: 0 });
-  }, [aircraft, config]);
+  }, [config]);
 
-  // Create/update/remove the aircraft marker; tint it when selected.
+  // Create/update/remove an aircraft marker per position; tint the selected one.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    const markers = aircraftMarkersRef.current;
+    const present = new Set(positions.map((p) => p.aircraft_id));
 
-    if (!aircraft) {
-      markerRef.current?.remove();
-      markerRef.current = null;
-      markerElRef.current = null;
-      return;
+    for (const [id, entry] of markers) {
+      if (!present.has(id)) {
+        entry.marker.remove();
+        markers.delete(id);
+      }
     }
 
-    if (!markerRef.current) {
-      const el = document.createElement("div");
-      el.className = "aircraft";
-      el.innerHTML = PLANE_SVG;
-      el.addEventListener("mousedown", (e) => e.stopPropagation());
-      el.addEventListener("click", (e) => {
-        e.stopPropagation();
-        onSelectRef.current();
-      });
-      markerElRef.current = el;
-      markerRef.current = new maplibregl.Marker({ element: el, rotationAlignment: "map" })
-        .setLngLat([aircraft.longitude, aircraft.latitude])
-        .addTo(map);
-    } else {
-      markerRef.current.setLngLat([aircraft.longitude, aircraft.latitude]);
+    for (const p of positions) {
+      let entry = markers.get(p.aircraft_id);
+      if (!entry) {
+        const el = document.createElement("div");
+        el.className = "aircraft";
+        el.innerHTML = PLANE_SVG;
+        const id = p.aircraft_id;
+        el.addEventListener("mousedown", (e) => e.stopPropagation());
+        el.addEventListener("click", (e) => {
+          e.stopPropagation();
+          onSelectRef.current(id);
+        });
+        const marker = new maplibregl.Marker({ element: el, rotationAlignment: "map" })
+          .setLngLat([p.longitude, p.latitude])
+          .addTo(map);
+        entry = { marker, el };
+        markers.set(p.aircraft_id, entry);
+      } else {
+        entry.marker.setLngLat([p.longitude, p.latitude]);
+      }
+      entry.marker.setRotation(p.heading_deg);
+      entry.el.classList.toggle("selected", p.aircraft_id === selectedId);
     }
-    markerRef.current.setRotation(aircraft.heading_deg);
-    markerElRef.current?.classList.toggle("selected", selected);
-  }, [aircraft, selected]);
+  }, [positions, selectedId]);
 
-  // Update the track whenever selection or reports change.
+  // Update the selected flight's track whenever selection or reports change.
   useEffect(() => {
     applyTrack();
-  }, [selected, track, aircraft, applyTrack]);
+  }, [selectedId, track, positions, applyTrack]);
 
   return (
     <>

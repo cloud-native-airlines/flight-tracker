@@ -1,57 +1,55 @@
 import { useEffect, useState } from "react";
 import { loadConfig } from "./config";
 import { useTracker } from "./useTracker";
+import { usePositions } from "./usePositions";
 import { useHistory } from "./useHistory";
-import { activeAircraft } from "./tracker-core";
 import { MapView } from "./MapView";
 import { ClockHud } from "./ClockHud";
 import type { Config } from "./types";
 
 function Tracker({ config }: { config: Config }) {
-  const { state, connection } = useTracker(config);
-  const aircraft = activeAircraft(state); // only airborne flights are shown
+  const { runId, simulatedAt, paused, connection, tickSeq } = useTracker(config);
+  const [bbox, setBbox] = useState<string | undefined>(undefined);
 
-  // Pre-select from the URL (?flight=<id>); selection persists across the
-  // flight's lifecycle and is only cleared by clicking away.
-  const [selected, setSelected] = useState(
-    () => new URLSearchParams(window.location.search).get("flight") === config.aircraftId,
+  // Pre-select an aircraft from the URL (?flight=<id>); cleared by clicking away.
+  const [selectedId, setSelectedId] = useState<string | null>(
+    () => new URLSearchParams(window.location.search).get("flight"),
   );
 
-  // Keep the selection in the URL query so links are shareable (hash, which
-  // holds the map view, is preserved).
+  // The fleet in view (latest position per flying aircraft), refetched each tick
+  // and whenever the viewport changes.
+  const positions = usePositions(config, runId, bbox, tickSeq);
+  const selected = positions.find((p) => p.aircraft_id === selectedId) ?? null;
+
+  // The selected flight's reported track, refreshed as its position advances.
+  const track = useHistory(config, runId, selectedId ?? "", selectedId !== null, selected?.tick_id ?? 0);
+
+  // Keep the selection in the URL so links are shareable (hash preserved).
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (selected) url.searchParams.set("flight", config.aircraftId);
+    if (selectedId) url.searchParams.set("flight", selectedId);
     else url.searchParams.delete("flight");
     window.history.replaceState(null, "", url);
-  }, [selected, config.aircraftId]);
-
-  // The reported track is fetched only while a flight is selected, and refreshed
-  // as its position advances (keyed on the latest tick id).
-  const track = useHistory(
-    config,
-    state.runId,
-    config.aircraftId,
-    selected && !!aircraft,
-    aircraft?.tick_id ?? 0,
-  );
+  }, [selectedId]);
 
   return (
     <>
       <MapView
         config={config}
-        aircraft={aircraft}
-        selected={selected}
+        positions={positions}
+        selectedId={selectedId}
         track={track}
-        onSelect={() => setSelected(true)}
-        onDeselect={() => setSelected(false)}
+        onSelect={setSelectedId}
+        onDeselect={() => setSelectedId(null)}
+        onBboxChange={setBbox}
       />
       <ClockHud
-        runId={state.runId}
-        simulatedAt={state.simulatedAt}
-        paused={state.paused}
+        runId={runId}
+        simulatedAt={simulatedAt}
+        paused={paused}
         connection={connection}
-        aircraft={aircraft}
+        count={positions.length}
+        selected={selected}
       />
     </>
   );
