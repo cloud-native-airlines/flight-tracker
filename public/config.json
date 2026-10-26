@@ -1,6 +1,7 @@
 {
   "adsbBase": "/adsb",
   "simBase": "/sim",
+  "opsBase": "/ops",
   "natsUrl": "/nats",
   "tickSubject": "cna.sim.tick",
   "aircraftId": "N100CA",

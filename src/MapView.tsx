@@ -99,6 +99,7 @@ export function MapView({
   positions,
   selectedId,
   track,
+  destination,
   onSelect,
   onDeselect,
   onBboxChange,
@@ -107,6 +108,7 @@ export function MapView({
   positions: Report[];
   selectedId: string | null;
   track: Report[];
+  destination: { lon: number; lat: number } | null;
   onSelect: (aircraftId: string) => void;
   onDeselect: () => void;
   onBboxChange: (bbox: string | undefined) => void;
@@ -129,12 +131,14 @@ export function MapView({
   const selectedRef = useRef(selectedId);
   const aircraftRef = useRef<Report | null>(selectedPosition);
   const trackRef = useRef(track);
+  const destinationRef = useRef(destination);
   const onSelectRef = useRef(onSelect);
   const onDeselectRef = useRef(onDeselect);
   const onBboxChangeRef = useRef(onBboxChange);
   selectedRef.current = selectedId;
   aircraftRef.current = selectedPosition;
   trackRef.current = track;
+  destinationRef.current = destination;
   onSelectRef.current = onSelect;
   onDeselectRef.current = onDeselect;
   onBboxChangeRef.current = onBboxChange;
@@ -181,25 +185,31 @@ export function MapView({
       const sel = selectedRef.current;
       const ac = aircraftRef.current;
       const tr = trackRef.current;
+      const dest = destinationRef.current;
       const show = sel && !!ac && tr.length > 0;
       if (show) {
         const coords: Lng[] = tr.map((r) => [r.longitude, r.latitude]);
-        const dest = config.airports[config.airports.length - 1];
         lineSrc.setData(lineFeature(coords));
         (map.getSource(PTS_SRC) as maplibregl.GeoJSONSource).setData(pointsCollection(coords));
+      }
+      // The planned line (current position → destination) needs a known
+      // destination from Operations; hide it when we don't have one.
+      const showPlan = show && !!dest;
+      if (showPlan) {
         (map.getSource(PLAN_SRC) as maplibregl.GeoJSONSource).setData(
-          lineFeature([[ac!.longitude, ac!.latitude], [dest.lon, dest.lat]]),
+          lineFeature([[ac!.longitude, ac!.latitude], [dest!.lon, dest!.lat]]),
         );
       }
       const vis = show ? "visible" : "none";
-      for (const id of [LINE_LYR, PTS_LYR, PLAN_LYR]) map.setLayoutProperty(id, "visibility", vis);
+      for (const id of [LINE_LYR, PTS_LYR]) map.setLayoutProperty(id, "visibility", vis);
+      map.setLayoutProperty(PLAN_LYR, "visibility", showPlan ? "visible" : "none");
       map.triggerRepaint();
       setDrawError(null);
     } catch (err) {
       console.error("track render failed", err);
       setDrawError(String(err));
     }
-  }, [config]);
+  }, []);
 
   // Load airport markers for the current viewport from ADS-B, reconciling the
   // live set of markers by airport code (add new, remove those scrolled away).
@@ -357,10 +367,11 @@ export function MapView({
     }
   }, [positions, selectedId]);
 
-  // Update the selected flight's track whenever selection or reports change.
+  // Update the selected flight's track whenever selection, reports, or the
+  // resolved destination change.
   useEffect(() => {
     applyTrack();
-  }, [selectedId, track, positions, applyTrack]);
+  }, [selectedId, track, positions, destination, applyTrack]);
 
   return (
     <>

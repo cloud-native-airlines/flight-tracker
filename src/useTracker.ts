@@ -1,31 +1,84 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { connect, type NatsConnection } from "nats.ws";
 import { natsWsUrl } from "./config";
-import { fetchClock } from "./sim";
+import {
+  fetchClock,
+  pauseClock,
+  patchClock,
+  resetClock,
+  resumeClock,
+  stepLadder,
+  SPEED_LADDER,
+  INTERVAL_LADDER,
+  type SimClock,
+} from "./sim";
 import type { Config, Tick } from "./types";
 
 export type Connection = "connecting" | "open" | "closed";
 
+export interface SimControls {
+  playPause: () => Promise<void>;
+  reset: () => Promise<void>;
+  stepSpeed: (dir: 1 | -1) => Promise<void>;
+  stepInterval: (dir: 1 | -1) => Promise<void>;
+}
+
 const decoder = new TextDecoder();
 
 // Subscribes to the Simulator's tick stream over NATS and exposes the clock
-// (run, simulated time, paused) plus a tick sequence number that increments on
-// every tick — consumers use it to refetch viewport data in step with the sim.
+// (run, simulated time, paused, speed, tick interval) plus a tick sequence number
+// that increments on every tick — consumers use it to refetch viewport data in
+// step with the sim. Also exposes controls that drive the Simulator's HTTP API
+// and apply the returned snapshot immediately (important while paused, when no
+// ticks arrive to refresh the display).
 export function useTracker(config: Config) {
   const [runId, setRunId] = useState<string | null>(null);
   const [simulatedAt, setSimulatedAt] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
+  const [speed, setSpeed] = useState(0);
+  const [tickInterval, setTickInterval] = useState(0);
   const [connection, setConnection] = useState<Connection>("connecting");
   const [tickSeq, setTickSeq] = useState(0);
+
+  // Latest clock values, readable by control callbacks without stale closures.
+  const latest = useRef({ paused: false, speed: 0, tickInterval: 0 });
+
+  const applyClock = useCallback(
+    (c: { run_id: string; simulated_at: string; paused: boolean; speed: number; tickInterval: number }) => {
+      setRunId(c.run_id);
+      setSimulatedAt(c.simulated_at);
+      setPaused(c.paused);
+      setSpeed(c.speed);
+      setTickInterval(c.tickInterval);
+      latest.current = { paused: c.paused, speed: c.speed, tickInterval: c.tickInterval };
+    },
+    [],
+  );
+
+  const applySnapshot = useCallback(
+    (s: SimClock) =>
+      applyClock({
+        run_id: s.run_id,
+        simulated_at: s.simulated_at,
+        paused: s.paused,
+        speed: s.speed,
+        tickInterval: s.tick_interval,
+      }),
+    [applyClock],
+  );
 
   useEffect(() => {
     let cancelled = false;
     let nc: NatsConnection | null = null;
 
     const onTick = (tick: Tick) => {
-      setRunId(tick.run_id);
-      setSimulatedAt(tick.simulated_at);
-      setPaused(tick.paused);
+      applyClock({
+        run_id: tick.run_id,
+        simulated_at: tick.simulated_at,
+        paused: tick.paused,
+        speed: tick.speed,
+        tickInterval: tick.tick_interval_s,
+      });
       setTickSeq((n) => n + 1);
     };
 
@@ -35,14 +88,8 @@ export function useTracker(config: Config) {
       try {
         const clock = await fetchClock(config.simBase);
         if (!cancelled) {
-          onTick({
-            run_id: clock.run_id,
-            tick_id: 0,
-            simulated_at: clock.simulated_at,
-            paused: clock.paused,
-            speed: 0,
-            tick_interval_s: 0,
-          });
+          applySnapshot(clock);
+          setTickSeq((n) => n + 1);
         }
       } catch (err) {
         console.warn("initial clock fetch failed", err);
@@ -89,7 +136,28 @@ export function useTracker(config: Config) {
       cancelled = true;
       void nc?.close();
     };
-  }, [config]);
+  }, [config, applyClock, applySnapshot]);
 
-  return { runId, simulatedAt, paused, connection, tickSeq };
+  const controls = useMemo<SimControls>(
+    () => ({
+      async playPause() {
+        const base = config.simBase;
+        applySnapshot(latest.current.paused ? await resumeClock(base) : await pauseClock(base));
+      },
+      async reset() {
+        applySnapshot(await resetClock(config.simBase));
+      },
+      async stepSpeed(dir) {
+        const next = stepLadder(SPEED_LADDER, latest.current.speed, dir);
+        applySnapshot(await patchClock(config.simBase, { speed: next }));
+      },
+      async stepInterval(dir) {
+        const next = stepLadder(INTERVAL_LADDER, latest.current.tickInterval, dir);
+        applySnapshot(await patchClock(config.simBase, { tick_interval: next }));
+      },
+    }),
+    [config, applySnapshot],
+  );
+
+  return { runId, simulatedAt, paused, speed, tickInterval, connection, tickSeq, controls };
 }

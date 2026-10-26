@@ -8,6 +8,7 @@ export interface Airport {
 export interface Config {
   adsbBase: string;
   simBase: string;
+  opsBase: string;
   natsUrl: string;
   tickSubject: string;
   aircraftId: string;

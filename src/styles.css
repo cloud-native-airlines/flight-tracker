@@ -119,6 +119,76 @@ body {
   background: var(--paused);
 }
 
+/* Simulation controls (play/pause, reset, speed & tick steppers) */
+.hud-controls {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.btn {
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ink);
+  padding: 8px 12px;
+  transition: background 0.12s, border-color 0.12s, opacity 0.12s;
+}
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.hud-buttons {
+  display: flex;
+  gap: 8px;
+}
+.hud-buttons .primary {
+  flex: 1;
+}
+.hud-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.step-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn.step {
+  width: 30px;
+  padding: 4px 0;
+  text-align: center;
+  font-size: 17px;
+  line-height: 1;
+}
+.step-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  min-width: 52px;
+  text-align: right;
+}
+
 .hud-aircraft {
   margin-top: 14px;
   padding-top: 12px;
@@ -143,16 +213,91 @@ body {
   color: var(--muted);
 }
 
-.hud-meta {
+/* Selected-flight info */
+.hud-flight {
   margin-top: 14px;
-  padding-top: 10px;
+  padding-top: 12px;
   border-top: 1px solid var(--border);
+}
+.flight-head {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  align-items: baseline;
+  gap: 8px;
+}
+.flight-number {
+  font-size: 18px;
+  font-weight: 700;
+}
+.flight-type {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.flight-airline {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 1px;
+}
+.route {
+  margin-top: 12px;
+}
+.route-codes {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 20px;
+  font-weight: 700;
+}
+.route-arrow {
+  color: var(--muted);
+  font-weight: 400;
+}
+.route-names {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
   font-size: 11px;
   color: var(--muted);
 }
+.route-names span {
+  flex: 1 1 0;
+  max-width: 48%;
+}
+.route-names span:last-child {
+  text-align: right;
+}
+.aircraft-block {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.ac-reg {
+  font-weight: 700;
+}
+.ac-type {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.ac-metrics {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ac-metrics > div {
+  display: flex;
+  justify-content: space-between;
+  font-variant-numeric: tabular-nums;
+}
+.ac-metrics dt {
+  color: var(--muted);
+}
+.ac-metrics dd {
+  margin: 0;
+  font-weight: 600;
+}
+
 .conn-open {
   color: var(--ok);
 }
@@ -162,7 +307,85 @@ body {
 .conn-closed {
   color: #ef4444;
 }
-.run {
+
+/* Debug panel */
+.debug-toggle {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  z-index: 10;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+.debug-toggle:hover {
+  border-color: var(--accent);
+}
+.debug-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 16px;
+}
+.debug-modal {
+  width: 100%;
+  max-width: 460px;
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px;
+}
+.debug-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.debug-close {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.debug-close:hover {
+  color: var(--ink);
+}
+.debug-grid {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.debug-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.debug-row dt {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.debug-row dd {
+  margin: 0;
+}
+.debug-value {
   font-variant-numeric: tabular-nums;
   word-break: break-all;
 }

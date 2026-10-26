@@ -21,6 +21,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/sim/, ""),
       },
+      "/ops": {
+        target: process.env.OPS_TARGET ?? "http://localhost:18082",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/ops/, ""),
+      },
       "/nats": {
         target: NATS_WS_TARGET,
         ws: true,
